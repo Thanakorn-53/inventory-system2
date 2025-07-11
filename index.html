@@ -1,104 +1,221 @@
 <!DOCTYPE html>
-<html lang="th">
+<html>
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ระบบจัดเก็บสินค้าออนไลน์</title>
+  <title>ระบบจัดเก็บสินค้า</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 1rem; }
-    h1 { text-align: center; }
-    input, button { width: 100%; margin-bottom: 0.5rem; padding: 0.5rem; font-size: 1rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
-    td button { width: auto; padding: 0.3rem 0.5rem; margin: 0 2px; }
+    body { font-family: sans-serif; padding: 20px; max-width: 480px; margin: auto; }
+    input, button { font-size: 16px; padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+    .product-list { margin-top: 20px; }
+    .product-item {
+      border: 1px solid #ccc;
+      padding: 10px 90px 10px 10px; /* เผื่อที่ไว้ปุ่มลบและแก้ไข */
+      margin-bottom: 10px;
+      border-radius: 8px;
+      position: relative;
+      word-wrap: break-word;
+    }
+    .delete-btn, .edit-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      width: auto;
+      height: 28px;
+      min-width: 28px;
+      color: white;
+    }
+    .delete-btn {
+      right: 10px;
+      background: #e74c3c;
+    }
+    .edit-btn {
+      right: 50px;
+      background: #3498db;
+    }
+    button.download-btn {
+      margin-top: 10px;
+      background: #2ecc71;
+      color: white;
+      border: none;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
-  <h1>🏦 ระบบจัดเก็บสินค้าออนไลน์</h1>
+  <h2>📦 ระบบจัดเก็บสินค้า</h2>
 
-  <input type="text" id="id" placeholder="รหัสสินค้า">
-  <input type="text" id="location" placeholder="ตำแหน่งจัดเก็บ">
-  <button onclick="addItem()">➕ เพิ่มสินค้า</button>
+  <label>รหัสสินค้า</label>
+  <input type="text" id="productId" placeholder="เช่น A001" />
 
-  <input type="text" id="search" placeholder="ค้นหาสินค้า..." onkeyup="renderItems()">
+  <label>ตำแหน่งจัดเก็บ</label>
+  <input type="text" id="productLocation" placeholder="เช่น ชั้น 1, กล่อง A" />
 
-  <table>
-    <thead>
-      <tr><th>รหัสสินค้า</th><th>ตำแหน่งจัดเก็บ</th><th>วันที่</th><th>การจัดการ</th></tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
+  <button id="addBtn" onclick="addOrUpdateProduct()">➕ เพิ่มสินค้า</button>
 
-<script>
-const scriptURL = "https://script.google.com/macros/s/AKfycbzt2cmc5oH8w2Z60O54w5anPDPYga0WXHNibhzFj_50UOjYA-90OWy04LKt8p7fInqL/exec";
-let items = [];
+  <hr />
 
-function fetchItems() {
-  fetch(scriptURL)
-    .then(res => res.json())
-    .then(data => {
-      items = data;
-      renderItems();
-    });
-}
+  <label>ค้นหา (รหัสสินค้า หรือ ตำแหน่งจัดเก็บ)</label>
+  <input type="text" id="searchInput" placeholder="พิมพ์คำค้นหา..." oninput="renderProducts()" />
 
-function renderItems() {
-  const keyword = document.getElementById('search').value.trim().toLowerCase();
-  const body = document.getElementById('tableBody');
-  body.innerHTML = '';
-  items.filter(item =>
-    item['รหัสสินค้า'].toLowerCase().includes(keyword) ||
-    item['ตำแหน่งจัดเก็บ'].toLowerCase().includes(keyword)
-  ).forEach(item => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><input value="${item['รหัสสินค้า']}" onchange="editItem(this, '${item._row}', 'id')"></td>
-      <td><input value="${item['ตำแหน่งจัดเก็บ']}" onchange="editItem(this, '${item._row}', 'location')"></td>
-      <td>${item['วันที่']}</td>
-      <td>
-        <button onclick="deleteItem('${item._row}')">❌</button>
-      </td>
-    `;
-    body.appendChild(tr);
-  });
-}
+  <button class="download-btn" onclick="downloadCSV()">⬇️ ดาวน์โหลด CSV</button>
 
-function addItem() {
-  const id = document.getElementById('id').value.trim();
-  const location = document.getElementById('location').value.trim();
-  const date = new Date().toISOString().split('T')[0];
-  if (!id || !location) return alert("กรุณากรอกข้อมูลให้ครบ");
+  <div class="product-list" id="productList"></div>
 
-  fetch(scriptURL, {
-    method: 'POST',
-    body: JSON.stringify({ action: "add", id, location, date }),
-  }).then(() => {
-    document.getElementById('id').value = '';
-    document.getElementById('location').value = '';
-    fetchItems();
-  });
-}
+  <script>
+    let editingId = null;
 
-function deleteItem(row) {
-  if (!confirm("ลบสินค้านี้หรือไม่?")) return;
-  fetch(scriptURL, {
-    method: 'POST',
-    body: JSON.stringify({ action: "delete", row })
-  }).then(fetchItems);
-}
+    function getToday() {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
 
-function editItem(input, row, field) {
-  const id = field === 'id' ? input.value : input.parentElement.parentElement.children[0].children[0].value;
-  const location = field === 'location' ? input.value : input.parentElement.parentElement.children[1].children[0].value;
-  const date = new Date().toISOString().split('T')[0];
+    function loadProducts() {
+      return JSON.parse(localStorage.getItem("products") || "[]");
+    }
 
-  fetch(scriptURL, {
-    method: 'POST',
-    body: JSON.stringify({ action: "update", row, id, location, date })
-  });
-}
+    function saveProducts(products) {
+      localStorage.setItem("products", JSON.stringify(products));
+    }
 
-fetchItems();
-</script>
+    function addOrUpdateProduct() {
+      const idInput = document.getElementById("productId");
+      const locationInput = document.getElementById("productLocation");
+      const id = idInput.value.trim();
+      const location = locationInput.value.trim();
+      const date = getToday();
+
+      if (!id || !location) {
+        alert("กรุณากรอกข้อมูลให้ครบ");
+        return;
+      }
+
+      let products = loadProducts();
+
+      if (editingId === null) {
+        // เพิ่มสินค้าใหม่ เช็คซ้ำรหัส
+        if (products.some(p => p.id.toLowerCase() === id.toLowerCase())) {
+          alert("รหัสสินค้านี้มีอยู่แล้ว!");
+          return;
+        }
+        products.push({ id, location, date });
+      } else {
+        // แก้ไขสินค้าเก่า
+        const index = products.findIndex(p => p.id === editingId);
+        if (index === -1) {
+          alert("ไม่พบสินค้าที่จะแก้ไข");
+          resetForm();
+          return;
+        }
+        // ถ้าแก้ไขรหัส ให้เช็คซ้ำกับตัวอื่น
+        if (editingId !== id && products.some(p => p.id.toLowerCase() === id.toLowerCase())) {
+          alert("รหัสสินค้านี้มีอยู่แล้ว!");
+          return;
+        }
+        products[index] = { id, location, date };
+        editingId = null;
+      }
+
+      saveProducts(products);
+      resetForm();
+      renderProducts();
+    }
+
+    function editProduct(id) {
+      let products = loadProducts();
+      const product = products.find(p => p.id === id);
+      if (!product) return alert("ไม่พบสินค้าที่จะแก้ไข");
+
+      document.getElementById("productId").value = product.id;
+      document.getElementById("productLocation").value = product.location;
+      editingId = product.id;
+
+      const addBtn = document.getElementById("addBtn");
+      addBtn.textContent = "💾 บันทึกข้อมูล";
+    }
+
+    function resetForm() {
+      document.getElementById("productId").value = "";
+      document.getElementById("productLocation").value = "";
+      editingId = null;
+      document.getElementById("addBtn").textContent = "➕ เพิ่มสินค้า";
+    }
+
+    function deleteProduct(id) {
+      if (!confirm("ต้องการลบสินค้านี้ใช่หรือไม่?")) return;
+      let products = loadProducts();
+      products = products.filter(p => p.id !== id);
+      saveProducts(products);
+      if (editingId === id) resetForm();
+      renderProducts();
+    }
+
+    function renderProducts() {
+      const products = loadProducts();
+      const listDiv = document.getElementById("productList");
+      const searchTerm = document.getElementById("searchInput").value.trim().toLowerCase();
+
+      listDiv.innerHTML = "";
+
+      const filtered = products.filter(p =>
+        p.id.toLowerCase().includes(searchTerm) ||
+        p.location.toLowerCase().includes(searchTerm)
+      );
+
+      if (filtered.length === 0) {
+        listDiv.innerHTML = "<p>ไม่พบข้อมูลสินค้า</p>";
+        return;
+      }
+
+      filtered.forEach(item => {
+        const el = document.createElement("div");
+        el.className = "product-item";
+        el.innerHTML = `
+          <strong>รหัส: ${item.id}</strong><br>
+          ตำแหน่ง: ${item.location}<br>
+          วันที่จัดเก็บ: ${item.date}
+          <button class="edit-btn" onclick="editProduct('${item.id}')">✏️</button>
+          <button class="delete-btn" onclick="deleteProduct('${item.id}')">✕</button>
+        `;
+        listDiv.appendChild(el);
+      });
+    }
+
+    function downloadCSV() {
+      const products = loadProducts();
+      if (products.length === 0) {
+        alert("ไม่มีข้อมูลสินค้าสำหรับดาวน์โหลด");
+        return;
+      }
+
+      const header = ["รหัสสินค้า", "ตำแหน่งจัดเก็บ", "วันที่จัดเก็บ"];
+      const rows = products.map(p => [
+        `"${p.id.replace(/"/g, '""')}"`,
+        `"${p.location.replace(/"/g, '""')}"`,
+        `"${p.date}"`
+      ]);
+      const csvContent = [header, ...rows].map(row => row.join(",")).join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "inventory.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    window.onload = renderProducts;
+  </script>
 </body>
 </html>
